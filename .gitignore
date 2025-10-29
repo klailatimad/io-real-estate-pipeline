@@ -1,0 +1,22 @@
+# Virtual environment
+.venv/
+venv/
+__pycache__/
+
+# Data snapshots and heavy files
+/data/raw/io_listings/
+/data/raw/images/
+/target/            # for dbt DuckDB or built files
+
+# Environment variables and secrets
+.env
+*.env
+
+# Python artifacts
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+
+# OS files
+.DS_Store
+Thumbs.db
