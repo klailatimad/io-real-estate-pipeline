@@ -1,6 +1,12 @@
-{{ config(materialized='table') }}
+{{ config(
+    materialized='incremental',
+    unique_key=['property_id','posted_date'],
+    on_schema_change='sync_all_columns'
+) }}
 
-with s as (select * from {{ ref('stg_io_listings') }}),
+with s as (
+  select * from {{ ref('stg_io_listings_all') }}
+),
 loc as (select * from {{ ref('dim_location') }}),
 prop as (select * from {{ ref('dim_property') }})
 select
@@ -15,3 +21,6 @@ select
 from s
 join loc l using (city, region)
 join prop p using (property_id)
+{% if is_incremental() %}
+  where s.posted_date > (select coalesce(max(posted_date), date '1900-01-01') from {{ this }})
+{% endif %}
