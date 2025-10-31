@@ -1,0 +1,12 @@
+version: 2
+models:
+  - name: fact_listing_daily
+    columns:
+      - name: property_id
+        tests: [not_null]
+      - name: posted_date
+        tests: [not_null]
+  - name: fact_listing_current
+    columns:
+      - name: property_id
+        tests: [not_null, unique]

@@ -1,0 +1,6 @@
+name: io_properties
+version: 1.0.0
+profile: io_duckdb
+models:
+  io_properties:
+    +materialized: table
