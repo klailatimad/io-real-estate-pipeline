@@ -20,3 +20,10 @@ __pycache__/
 # OS files
 .DS_Store
 Thumbs.db
+
+# DBT artifacts
+dbt/target/
+dbt/logs/
+dbt/.dbt/
+dbt/packages/
+dbt/modules/

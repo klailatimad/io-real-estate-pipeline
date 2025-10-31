@@ -1,0 +1,8 @@
+version: 2
+models:
+  - name: stg_io_listings
+    columns:
+      - name: property_id
+        tests: [not_null, unique]
+      - name: posted_date
+        tests: [not_null]
