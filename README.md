@@ -1,7 +1,8 @@
+
 # 🏗️ Ontario Infrastructure Ontario (IO) Properties – Data Pipeline PoC
 
-A **local-first data engineering project** to ingest, clean, and prepare Ontario’s public **Infrastructure Ontario “Properties for Sale”** dataset for analysis and future cloud deployment.  
-The goal is to design and practice a full **end-to-end data pipeline** — from ingestion and transformation to visualization — using modern data tools.
+A **local-first data engineering project** to ingest, clean, and prepare Ontario’s public **Infrastructure Ontario “Properties for Sale”** dataset for analysis and visualization.  
+The goal is to design and practice a full **end-to-end data pipeline** — from ingestion and transformation to dashboarding — using modern open-source data tools.
 
 ----------
 
@@ -9,95 +10,171 @@ The goal is to design and practice a full **end-to-end data pipeline** — from 
 
 This project demonstrates how to:
 
--   **Ingest** real estate listings data directly from a public ASP.NET WebForms site using Python and BeautifulSoup.
-    
--   Handle **pagination and form postbacks** (via `__VIEWSTATE`, `__EVENTVALIDATION`).
-    
--   **Normalize and clean** property-level data (e.g., prices, acres, square footage, dates).
-    
--   **Persist** structured data as daily **CSV and Parquet snapshots**.
-    
--   Optionally **download PDF property maps** for binary data handling practice.
-    
--   Prepare for downstream **dbt transformations** and **Streamlit dashboarding**.
-    
+-   **Ingest** real estate listings from a public ASP.NET WebForms site using Python and BeautifulSoup
+-   Handle **pagination and form postbacks** (`__VIEWSTATE`, `__EVENTVALIDATION`)
+-   **Normalize and clean** fields (price, acres, square footage, posted date, etc.)   
+-   **Snapshot** raw data daily as CSVs for incremental history
+-   **Transform** data with dbt + DuckDB into facts, dims, and marts
+-   **Visualize** trends and insights in a **Streamlit dashboard**
 
-All work runs locally for compliance and reproducibility.  
-The project will later evolve into a full local-to-cloud pipeline (dbt + Great Expectations + Streamlit + Airflow or Dagster).
+All processing runs **locally** for compliance, reproducibility, and easy iteration.  
+Future phases include validation (Great Expectations), orchestration (Airflow), and cloud migration.
 
 ----------
 
 ## 🧱 Repository Structure
 
 ```
-io-properties-pipeline/
-  ├── README.md
-  ├── requirements.txt
-  ├── .env.example
-  ├── .gitignore
-  ├── src/
-  │   ├── common/
-  │   │   └── io_utils.py
-  │   └── ingestion/
-  │       ├── io_scrape.py
-  │       └── html_parsers.py
-  ├── data/
-  │   └── raw/
-  │       ├── io_listings/         # daily snapshots (CSV + Parquet)
-  │       └── images/              # optional per-property PDF maps
-  └── scripts/
-      └── run_scrape_once.sh
-```
+real_estate_data_project/
+│
+├── data/
+│   └── raw/io_listings/ # Daily scraped CSVs (YYYY-MM-DD/io_listings.csv) 
+│
+├── dbt/
+│   ├── dbt_project.yml
+│   ├── target/io.duckdb # DuckDB warehouse 
+│   └── models/
+│       ├── staging/ # stg_io_listings, stg_io_listings_all 
+│       ├── intermediate/ # int_io_events, int_io_latest_listing 
+│       ├── dims/ # dim_property, dim_location 
+│       ├── facts/ # fact_listing_daily, fact_listing_current 
+│       └── marts/ # mart_price_trends, mart_source_quality 
+│
+├── scripts/
+│   ├── scrape_io_listings.py # Daily scraper (Infrastructure Ontario) 
+│   └── inspect_duckdb.py # Quick inspection & row counts │
+├── streamlit_app/
+│   └── app.py # Streamlit dashboard (interactive filters, charts) 
+│
+├── requirements.txt
+└── README.md
+``` 
 
 ----------
 
 ## ⚙️ Current Capabilities
 
-| Feature | Description | 
-| -------- | -------- |
-| **Web Scraper** | Extracts listings from Infrastructure Ontario’s “Properties for Sale” portal | 
-|**Pagination Handler**|Handles ASP.NET `__doPostBack` pagination|
-|**Data Normalization**|Cleans and types numeric/date fields (price, acres, sqft, posted date)|
-|**Snapshotting**|Saves daily CSV and Parquet outputs under `data/raw/io_listings/YYYY-MM-DD/`|
-|**Polite Throttling**|Configurable request sleep interval for responsible scraping|
-|**PDF Downloads**|Optional image/PDF fetch for each property|
-|**Deduplication**|Prevents repeated records between page sets|
-|**Logging**|Prints page-by-page row counts and total record summary|
+|Feature|Description|
+|---|---|
+|**Web Scraper**|Extracts property listings from IO’s “Properties for Sale” portal|
+|**Pagination Handler**|Handles ASP.NET `__doPostBack` pagination automatically|
+|**Data Normalization**|Cleans and types numeric/date fields|
+|**Daily Snapshots**|Saves CSVs under `data/raw/io_listings/YYYY-MM-DD/`|
+|**dbt Transformations**|Builds layered models: staging → facts/dims → marts|
+|**Incremental Model**|`fact_listing_daily` appends new daily records|
+|**Validation Tests**|dbt tests ensure `not_null` and `unique` keys|
+|**Streamlit Dashboard**|Interactive filters by Region, City, and Status|
+|**Altair Charts**|Price distribution & weekly median price trends|
+|**DuckDB Warehouse**|Local analytical database used by dbt + Streamlit|
 
 ----------
 
-## 🧩 Tools Used
+## 📊 Pipeline Workflow
 
--   **Python 3.11+**
+### 1. Scrape Daily Listings
+
+`python scripts/scrape_io_listings.py` 
+
+→ Creates a new folder like:
+
+`data/raw/io_listings/2025-10-31/io_listings.csv` 
+
+----------
+
+### 2. Run dbt Transformations
+
+`cd dbt
+dbt run
+dbt test` 
+
+-   `stg_io_listings_all` unions all daily CSVs
     
--   `requests`, `beautifulsoup4`, `pandas`, `pyarrow`
+-   `fact_listing_daily` is **incremental**, appending new data daily
     
--   `tenacity` for retry logic
-    
--   `dotenv` for local configuration
-    
--   (Planned) **dbt**, **DuckDB**, **Streamlit**, **Great Expectations**
+-   `fact_listing_current` and marts refresh fully
     
 
 ----------
 
-## 📊 Steps Completed So Far
+### 3. Inspect DuckDB Data
 
-1.  **Exploration of public Ontario data sources** for suitable real estate data.
+`python scripts/inspect_duckdb.py --db dbt/target/io.duckdb --limit 5` 
+
+Displays:
+
+-   Tables and row counts
     
-2.  Identified **Infrastructure Ontario “Properties for Sale”** as viable source.
+-   Top rows for staging, facts, and marts
     
-3.  Built **modular ingestion code** (`io_scrape.py` and `html_parsers.py`) handling ASP.NET pagination.
+-   Region-level sample summaries
     
-4.  Added **data normalization** (price, sqft, acres, posted date).
+
+----------
+
+### 4. Launch Streamlit Dashboard
+
+`streamlit run streamlit_app/app.py` 
+
+**Features:**
+
+-   Toggle between **Current** and **Historical** listings
     
-5.  Implemented **daily snapshot persistence** (CSV + Parquet).
+-   Filter by Region, City, and Status
     
-6.  Validated correctness — **153 total listings** parsed, matching the portal’s “Total Records: 153”.
+-   Choose date range (for Historical mode)
     
-7.  Established **folder structure and helper utilities** for reusability.
+-   Metrics (listing count, median price/sqft/acres)
     
-8.  Created **README documentation and repo scaffold** for version control setup.
+-   Charts (price distribution, weekly trends)
+    
+-   Full table of filtered results
+    
+
+----------
+
+## 🧩 dbt Model Highlights
+
+|Model|Type|Purpose|
+|---|---|---|
+|`stg_io_listings`|Table|Cleaned data from daily CSVs|
+|`stg_io_listings_all`|View|Union of all CSV snapshots|
+|`dim_location`|Table|City → Region mapping|
+|`dim_property`|Table|Property metadata|
+|`fact_listing_daily`|Incremental|Historical records|
+|`fact_listing_current`|Table|Latest state snapshot|
+|`mart_price_trends`|Table|Weekly median prices by city|
+|`mart_source_quality`|Table|Data completeness metrics|
+
+----------
+
+## 🧪 Data Quality Tests
+
+Run:
+
+`dbt test` 
+
+Tests include:
+
+-   `unique` and `not_null` on `property_id`
+    
+-   `not_null` on `posted_date`
+    
+-   `unique` keys on facts and staging models
+    
+
+----------
+
+## 📈 Visualization Highlights
+
+-   **KPI cards** for listings, median price, acres, sqft
+    
+-   **Histogram** for price distribution
+    
+-   **Line chart** for weekly price trends
+    
+-   **Dynamic table** updated by sidebar filters
+    
+-   Works for both _Current_ and _Historical_ data views
     
 
 ----------
@@ -106,33 +183,35 @@ io-properties-pipeline/
 
 |Stage|Description|Status|
 |---|---|---|
-|**Data Validation**|Add Great Expectations suite for raw data integrity|⏳ Planned|
-|**Transformations (dbt)**|Create DuckDB-based `stg_io_listings` model with data typing|⏳ Planned|
-|**Visualization**|Build Streamlit dashboard (filter, KPIs, price histogram)|⏳ Planned|
-|**Automation**|Wrap ingestion into Airflow or Dagster DAG|⏳ Future
-|**Cloud Migration**|Move data & transformations to Azure/AWS for end-to-end demo|⏳ Future|
+|**Data Validation**|Add Great Expectations or dbt data_tests|⏳ Planned
+|**Automation**|Airflow DAG for scrape + dbt + Streamlit|⏳ Future|
+|**Cloud Deployment**|Port to Snowflake or Azure Synapse|⏳ Future|
+|**Testing & CI/CD**|Add pytest and GitHub Actions|⏳ Future
+|**Dockerization**|Local containerized demo|⏳ Future|
 
 ----------
 
-## 💡 Future Enhancements
+## 🧰 Tools Used
 
--   Scrape or integrate additional sources (TRREB/CREA, StatsCan) for comparison.
+-   **Python 3.11+** (`requests`, `beautifulsoup4`, `pandas`, `duckdb`, `altair`, `streamlit`)
     
--   Add property “details page” enrichment for broker info.
+-   **dbt-core 1.8+** (transformations, testing)
     
--   Develop a “property history” model (e.g., price or status changes over time).
+-   **DuckDB** (local analytical database)
     
--   Build unit tests and a CI workflow with GitHub Actions.
+-   **Streamlit** (interactive visualization)
     
--   Parameterize and containerize the pipeline via Docker Compose.
+-   **Altair** (charts)
     
-
-----------
-
-## 🛡️ Data Use Disclaimer
-
-This project is for **educational and non-commercial purposes** only.  
-The Infrastructure Ontario property data is publicly accessible, but redistribution or publication is not permitted.  
-If demonstrating work publicly (e.g., GitHub portfolio), **avoid including raw data** and instead show schemas, charts, or mock samples.
 
 ----------
+
+## 🧱 Version History
+
+|Branch|Description|Key Changes|
+|---|---|---|
+|`main`|Base ingestion and repo scaffold|Scraper + normalization logic|
+|`feature/dbt-setup`|Added dbt project|dbt_project.yml, staging & dim models, tests|
+|`feature/dbt-incremental`|Introduced incremental loads| `fact_listing_daily`,schema drift handling|
+|`feature/dashboard`|Added Streamlit visualization|`app.py`, filters, charts, KPIs|
+|`main` (merged)|Current stable release|Fully working local pipeline from scrape → dbt → Streamlit|

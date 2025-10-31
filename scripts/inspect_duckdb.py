@@ -2,51 +2,62 @@
 import argparse
 import duckdb
 import pandas as pd
+from pathlib import Path
 
 def main():
     ap = argparse.ArgumentParser(description="Inspect dbt DuckDB warehouse")
-    ap.add_argument("--db", default="/dbt/target/io.duckdb", help="Path to DuckDB file")
+    ap.add_argument("--db", default="dbt/target/io.duckdb", help="Path to DuckDB file")
     ap.add_argument("--limit", type=int, default=5, help="Head rows to show")
     args = ap.parse_args()
 
-    con = duckdb.connect(args.db)
+    # Normalize DB path
+    db_path = Path(args.db).resolve()
+    con = duckdb.connect(str(db_path))
+
+    print(f"\nConnected to {db_path}")
 
     print("\n== Tables ==")
-    tables = con.sql("""
-        select table_schema, table_name
-        from information_schema.tables
-        where table_schema = 'main'
-        order by table_name
+    tables_df = con.sql("""
+        SELECT table_schema, table_name, table_type
+        FROM information_schema.tables
+        WHERE table_schema = 'main'
+        ORDER BY table_name
     """).df()
-    print(tables)
+    print(tables_df[["table_schema", "table_name"]])
 
-    def head(name):
+    def head(name: str):
         print(f"\n== {name} (top {args.limit}) ==")
         try:
-            df = con.sql(f"select * from {name} limit {args.limit}").df()
+            df = con.sql(f'SELECT * FROM "{name}" LIMIT {args.limit}').df()
             print(df)
         except Exception as e:
             print(f"(skipped: {e})")
 
-    # Row counts (Python loop avoids dynamic SQL identifiers)
+    # --- Row counts (skip views) ---
     print("\n== Row counts ==")
     tables = con.sql("""
-        select table_name
-        from information_schema.tables
-        where table_schema='main'
-        order by table_name
+        SELECT table_name, table_type
+        FROM information_schema.tables
+        WHERE table_schema='main'
+        ORDER BY table_name
     """).fetchall()
 
     rows = []
-    for (tname,) in tables:
-        cnt = con.sql(f'SELECT COUNT(*) FROM "{tname}"').fetchone()[0]
-        rows.append((tname, cnt))
-    import pandas as pd
+    for tname, ttype in tables:
+        if ttype != "BASE TABLE":
+            continue  # skip views
+        try:
+            cnt = con.sql(f'SELECT COUNT(*) FROM "{tname}"').fetchone()[0]
+            rows.append((tname, cnt))
+        except Exception as e:
+            rows.append((tname, f"error: {e}"))
+
     print(pd.DataFrame(rows, columns=["table_name", "rows"]))
 
-    # Quick heads
+    # --- Quick heads ---
     for t in [
         "stg_io_listings",
+        "stg_io_listings_all",
         "dim_location",
         "dim_property",
         "fact_listing_daily",
@@ -56,18 +67,21 @@ def main():
     ]:
         head(t)
 
-    # Example join preview
+    # --- Example join preview ---
     print("\n== Sample by region/city from fact_listing_current ==")
-    print(con.sql("""
-      select l.region, l.city, count(*) as listings,
-             round(median(f.price),0) as median_price
-      from fact_listing_current f
-      join dim_location l using (location_id)
-      where f.price is not null
-      group by 1,2
-      order by listings desc
-      limit 10
-    """).df())
+    try:
+        print(con.sql("""
+          SELECT l.region, l.city, COUNT(*) AS listings,
+                 ROUND(median(f.price), 0) AS median_price
+          FROM fact_listing_current f
+          JOIN dim_location l USING (location_id)
+          WHERE f.price IS NOT NULL
+          GROUP BY 1,2
+          ORDER BY listings DESC
+          LIMIT 10
+        """).df())
+    except Exception as e:
+        print(f"(skipped sample join: {e})")
 
 if __name__ == "__main__":
     main()
