@@ -41,12 +41,21 @@ real_estate_data_project/
 │       └── marts/ # mart_price_trends, mart_source_quality 
 │
 ├── scripts/
-│   ├── scrape_io_listings.py # Daily scraper (Infrastructure Ontario) 
-│   └── inspect_duckdb.py # Quick inspection & row counts │
+│   ├── set_env.sh # Exports IO_RAW_GLOB & IO_DUCKDB_PATH 
+│   ├── build_local.sh # Runs dbt build with env correctly set
+│   ├── dev_all.sh # Scrape -> dbt build -> Streamlit (local dev)
+│   └── inspect_duckdb.py # Quick inspection & row counts 
+│
 ├── streamlit_app/
 │   └── app.py # Streamlit dashboard (interactive filters, charts) 
 │
+├── src/
+│   ├── ingestion/
+│   │   ├── io_scrape.py # Scraper module
+│   │   └── html_parser.py # HTML parsing helpers
+│
 ├── requirements.txt
+├── .env.example # Example env vars for local setup
 └── README.md
 ``` 
 
@@ -73,19 +82,39 @@ real_estate_data_project/
 
 ### 1. Scrape Daily Listings
 
-`python scripts/scrape_io_listings.py` 
+```sh
+python -m src.ingestion.io_scrape \
+  --out data/raw/io_listings \
+  --page-size all \
+  --sleep 1.0
+```
 
 → Creates a new folder like:
 
-`data/raw/io_listings/2025-10-31/io_listings.csv` 
+`data/raw/io_listings/YYYY-MM-DD/io_listings.csv` 
 
 ----------
 
 ### 2. Run dbt Transformations
 
-`cd dbt
+```sh
+# From project root, set env so stg_io_listings_all can find all CSVs
+export IO_RAW_GLOB="$(pwd)/data/raw/io_listings/*/io_listings.csv"
+
+cd dbt
 dbt run
-dbt test` 
+dbt test
+``` 
+After a new daily scrape, you can force a full refresh of models that depend on all CSVs:
+
+`dbt run --full-refresh --select stg_io_listings_all+ fact_listing_daily+`
+
+
+Or just use the helper:
+
+`./scripts/build_local.sh`
+
+DBT Models:
 
 -   `stg_io_listings_all` unions all daily CSVs
     
@@ -98,7 +127,13 @@ dbt test`
 
 ### 3. Inspect DuckDB Data
 
-`python scripts/inspect_duckdb.py --db dbt/target/io.duckdb --limit 5` 
+
+```sh
+# Optional: if you pointed IO_DUCKDB_PATH elsewhere
+export IO_DUCKDB_PATH="dbt/target/io.duckdb"
+
+python scripts/inspect_duckdb.py --db dbt/target/io.duckdb --limit 5
+```
 
 Displays:
 
@@ -113,7 +148,12 @@ Displays:
 
 ### 4. Launch Streamlit Dashboard
 
-`streamlit run streamlit_app/app.py` 
+```sh
+# Ensure env is set so the app points to the correct DB
+export IO_DUCKDB_PATH="dbt/target/io.duckdb"
+
+streamlit run streamlit_app/app.py
+``` 
 
 **Features:**
 
@@ -179,6 +219,22 @@ Tests include:
 
 ----------
 
+## 🩺 Troubleshooting
+
+- dbt: “No files found that match the pattern … io_listings.csv”
+  - Set IO_RAW_GLOB to an absolute path, then rebuild:
+    ```sh
+    export IO_RAW_GLOB="$(pwd)/data/raw/io_listings/*/io_listings.csv"
+    cd dbt && dbt run --full-refresh --select stg_io_listings_all+
+    ```
+
+- Streamlit shows empty data
+  - Make sure you’ve scraped and then run dbt. Also confirm `IO_DUCKDB_PATH` points to the right file.
+
+- Date picker errors in Historical mode
+  - Ensure you have at least one CSV day under `data/raw/io_listings/` and re-run dbt to populate `fact_listing_daily`.
+----------
+
 ## 🪜 Next Steps
 
 |Stage|Description|Status|
@@ -205,6 +261,35 @@ Tests include:
     
 
 ----------
+## 🔧 Environment Variables
+
+These are used by dbt (DuckDB) and the Streamlit app.
+
+```sh
+# REQUIRED: absolute path to your raw daily CSVs for stg_io_listings_all
+export IO_RAW_GLOB="<ABSOLUTE_PATH>/data/raw/io_listings/*/io_listings.csv"
+
+# OPTIONAL: override DuckDB file used by Streamlit & scripts
+export IO_DUCKDB_PATH="dbt/target/io.duckdb"
+```
+
+- Linux/WSL/macOS:
+    ```
+    export IO_RAW_GLOB="$(pwd)/data/raw/io_listings/*/io_listings.csv"
+    ```
+
+- PowerShell:
+    ```
+    $env:IO_RAW_GLOB = "$(Get-Location)/data/raw/io_listings/*/io_listings.csv"
+    ```
+
+You can also run:
+```sh
+./scripts/set_env.sh
+```
+
+----------
+
 
 ## 🧱 Version History
 
@@ -214,4 +299,5 @@ Tests include:
 |`feature/dbt-setup`|Added dbt project|dbt_project.yml, staging & dim models, tests|
 |`feature/dbt-incremental`|Introduced incremental loads| `fact_listing_daily`,schema drift handling|
 |`feature/dashboard`|Added Streamlit visualization|`app.py`, filters, charts, KPIs|
+|`feature/dbt-path-fix`|Stablize dbt CSV glob and local dev flow|`IO_RAW_GLOB` env var for `stg_io_listings_all`, helper scripts (`set_env.sh`, `build_local.sh`, `dev_all.sh`), README updates|
 |`main` (merged)|Current stable release|Fully working local pipeline from scrape → dbt → Streamlit|
