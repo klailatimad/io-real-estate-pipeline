@@ -1,9 +1,14 @@
 {{ config(materialized='view') }}
 
+{% set RAW_GLOB = env_var('IO_RAW_GLOB', None) %}
+{% if not RAW_GLOB %}
+  {% do exceptions.raise_compiler_error("Set IO_RAW_GLOB to the absolute path of data/raw/io_listings/*/io_listings.csv") %}
+{% endif %}
+
 with src as (
   select *
   from read_csv_auto(
-    '../data/raw/io_listings/*/io_listings.csv',
+    '{{ RAW_GLOB }}',
     header=true,
     all_varchar=true,
     union_by_name=true

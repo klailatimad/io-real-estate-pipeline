@@ -9,6 +9,8 @@ from datetime import date
 # ---------- Config ----------
 st.set_page_config(page_title="Ontario IO Listings", layout="wide")
 DB_PATH = os.getenv("IO_DUCKDB_PATH", "dbt/target/io.duckdb")
+RAW_GLOB = os.getenv("IO_RAW_GLOB", "")
+# st.caption(f"RAW_GLOB: {RAW_GLOB or '(not set)'}")
 
 @st.cache_resource(show_spinner=False)
 def get_conn():
