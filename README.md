@@ -172,6 +172,54 @@ streamlit run streamlit_app/app.py
 
 ----------
 
+## 🧭 Orchestration (local)
+
+This repo includes a Makefile to run the pipeline end to end.
+
+### Common commands:
+```sh
+make scrape          # scrape daily IO listings into data/raw/io_listings/YYYY-MM-DD/io_listings.csv
+make dbt-run         # run dbt models (uses IO_RAW_GLOB)
+make dbt-test        # run dbt tests with safe settings
+make daily           # scrape -> dbt-run -> dbt-test (one-shot)
+make dashboard       # launch Streamlit UI
+make inspect         # quick row counts and samples from DuckDB
+```
+
+### Environment:
+
+- Ensure IO_RAW_GLOB is available to dbt. The Makefile sets it automatically to:
+```sh
+<data_root>/data/raw/io_listings/*/io_listings.csv
+```
+
+- You can also add it to .env:
+```sh
+IO_RAW_GLOB=/absolute/path/to/data/raw/io_listings/*/io_listings.csv
+```
+
+### Cron example (WSL/Linux):
+
+1. Edit the repository path inside scripts/run_daily.sh.
+2. Add to crontab:
+
+```sh
+crontab -e
+```
+```sh
+# Run every day at 07:30 local time
+30 7 * * * /home/klailatimad/real_estate_data_project/scripts/run_daily.sh >> /home/klailatimad/real_estate_data_project/logs/daily.log 2>&1
+```
+
+3. Create logs/ if missing:
+```sh
+mkdir -p logs
+```
+
+*Tip: on Windows Task Scheduler, call bash -lc "cd /home/klailatimad/real_estate_data_project && ./scripts/run_daily.sh".*
+
+----------
+
 ## 🧩 dbt Model Highlights
 
 |Model|Type|Purpose|
@@ -240,7 +288,7 @@ Tests include:
 |Stage|Description|Status|
 |---|---|---|
 |**Data Validation**|Add Great Expectations or dbt data_tests|⏳ Planned
-|**Automation**|Airflow DAG for scrape + dbt + Streamlit|⏳ Future|
+|**Automation**|Local orchestration via Makefile and cron implemented; full Airflow DAG planned next|✅ Partial|
 |**Cloud Deployment**|Port to Snowflake or Azure Synapse|⏳ Future|
 |**Testing & CI/CD**|Add pytest and GitHub Actions|⏳ Future
 |**Dockerization**|Local containerized demo|⏳ Future|
@@ -300,4 +348,5 @@ You can also run:
 |`feature/dbt-incremental`|Introduced incremental loads| `fact_listing_daily`,schema drift handling|
 |`feature/dashboard`|Added Streamlit visualization|`app.py`, filters, charts, KPIs|
 |`feature/dbt-path-fix`|Stablize dbt CSV glob and local dev flow|`IO_RAW_GLOB` env var for `stg_io_listings_all`, helper scripts (`set_env.sh`, `build_local.sh`, `dev_all.sh`), README updates|
+|`feature/orchestration-local`|Local one-click runs|Makefile targets, cron example, documented `IO_RAW_GLOB` behavior|
 |`main` (merged)|Current stable release|Fully working local pipeline from scrape → dbt → Streamlit|
